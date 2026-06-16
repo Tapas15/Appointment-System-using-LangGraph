@@ -1,6 +1,7 @@
 import pandas as pd
 from langchain_core.tools import tool
 from dental_agent.config.settings import CSV_PATH
+from dental_agent.utils import format_date_slot
 
 
 def _load_df() -> pd.DataFrame:
@@ -21,7 +22,7 @@ def _load_df() -> pd.DataFrame:
 
 def _save_df(df: pd.DataFrame) -> None:
     out = df.copy()
-    out["date_slot"] = out["date_slot"].dt.strftime("%-m/%-d/%Y %-H:%M")
+    out["date_slot"] = out["date_slot"].map(format_date_slot)
     out["is_available"] = out["is_available"].map({True: "TRUE", False: "FALSE"})
     out["patient_to_attend"] = (
         out["patient_to_attend"]

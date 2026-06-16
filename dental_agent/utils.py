@@ -1,4 +1,6 @@
+import os
 from typing import List
+import pandas as pd
 from langchain_core.messages import (
     AIMessage,
     BaseMessage,
@@ -6,6 +8,13 @@ from langchain_core.messages import (
     SystemMessage,
     ToolMessage,
 )
+
+
+def format_date_slot(value) -> str:
+    timestamp = pd.Timestamp(value)
+    if os.name == "nt":
+        return timestamp.strftime("%#m/%#d/%Y %#H:%M")
+    return timestamp.strftime("%-m/%-d/%Y %-H:%M")
 
 
 def sanitize_messages(messages: List[BaseMessage]) -> List[BaseMessage]:

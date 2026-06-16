@@ -1,247 +1,245 @@
 # Dental Appointment Management System
 
-A conversational AI system for managing dental appointments, powered by LangGraph and Grok-4 (xAI). This project demonstrates a multi-agent architecture where specialized agents work together to handle different appointment-related tasks through natural language interactions.
+A conversational dental appointment management system built with LangGraph and xAI Grok. The application uses a multi-agent graph to route patient requests to specialized agents for availability lookup, booking, cancellation, and rescheduling.
 
-## Overview
+## Features
 
-This system provides a chat-based interface for patients and clinic staff to:
-- **Check available appointment slots** and doctor information
-- **Book new appointments** with preferred doctors
-- **Cancel existing appointments**
-- **Reschedule appointments** to different time slots
-
-The system uses a supervisor agent that intelligently routes user requests to the appropriate specialized agent based on the detected intent, making it an excellent educational example of multi-agent AI systems.
+- Search available appointment slots by specialization, doctor, or date.
+- List doctors by specialization or by available slots on a date.
+- Book appointments only after checking slot availability.
+- Cancel booked appointments.
+- Reschedule appointments to available slots with the same doctor.
+- Keep appointment data in a CSV file for simple local development.
 
 ## Architecture
 
-### Multi-Agent Design
+The system uses a LangGraph workflow with a supervisor agent that routes each user message to the correct specialist agent.
 
-The system follows a supervisor pattern where a central coordinator analyzes user messages and routes them to the most appropriate specialized agent:
-
-```
-                    ┌──────────────┐
-                    │   Supervisor │ ← Intent classification & routing
-                    └──────┬───────┘
-                           │
-          ┌────────────────┼────────────────┐
-          │                │                │
-          ▼                ▼                ▼
-   ┌─────────────┐ ┌─────────────┐ ┌───────────────┐
-   │ Info Agent  │ │   Booking   │ │  Cancellation │
-   │             │ │    Agent    │ │    Agent      │
-   └─────────────┘ └─────────────┘ └───────────────┘
-          │
-          ▼
-   ┌───────────────┐
-   │   Reschedule  │
-   │    Agent      │
-   └───────────────┘
+```text
+User
+  │
+  ▼
+Supervisor ── intent classification and routing
+  │
+  ├── Info Agent ───────── queries about slots, doctors, and appointments
+  ├── Booking Agent ────── collects details and books appointments
+  ├── Cancellation Agent ─ cancels booked appointments
+  └── Rescheduling Agent ─ moves appointments to new available slots
 ```
 
 ### Agent Responsibilities
 
-- **Supervisor**: Analyzes user input, classifies intent (get_info, book, cancel, reschedule, end), and routes to the appropriate agent
-- **Info Agent**: Handles queries about available slots, doctor schedules, and patient appointment lookups
-- **Booking Agent**: Collects booking details and creates new appointments
-- **Cancellation Agent**: Handles appointment cancellation requests
-- **Rescheduling Agent**: Manages moving appointments to different time slots
+| Agent | Responsibility |
+| --- | --- |
+| Supervisor | Detects intent and routes to the correct agent. |
+| Info Agent | Answers availability, doctor, and appointment lookup queries. |
+| Booking Agent | Collects patient ID, doctor, specialization, and date/time, then books the appointment. |
+| Cancellation Agent | Finds booked appointments and cancels them after confirmation. |
+| Rescheduling Agent | Moves an existing appointment to a new available slot. |
 
-### Technology Stack
+## Technology Stack
 
-- **LangGraph**: Orchestrates the multi-agent workflow and state management
-- **LangChain**: Provides the LLM integration and tool framework
-- **Grok-4 (xAI)**: Powers the conversational AI capabilities
-- **Pandas**: Manages the CSV-based data storage
-- **Pydantic**: Handles structured data validation
+- Python 3.10+
+- LangGraph
+- LangChain
+- xAI Grok model through `langchain-xai`
+- Pandas for CSV-based data handling
+- Pydantic for structured routing decisions
+- `python-dotenv` for local environment configuration
 
 ## Project Structure
 
+```text
+Appointment-System-using-LangGraph/
+├── main.py
+├── doctor_availability.csv
+├── requirements.txt
+├── data_/
+│   ├── doctor_availability.csv
+│   ├── doctor_availability1.csv
+│   └── doctors.csv
+└── dental_agent/
+    ├── agent.py
+    ├── utils.py
+    ├── agents/
+    │   ├── supervisor.py
+    │   ├── info_agent.py
+    │   ├── booking_agent.py
+    │   ├── cancellation_agent.py
+    │   └── rescheduling_agent.py
+    ├── config/
+    │   └── settings.py
+    ├── models/
+    │   └── state.py
+    ├── tools/
+    │   ├── csv_reader.py
+    │   └── csv_writer.py
+    └── workflows/
+        └── graph.py
 ```
-dental_agent_project/
-├── main.py                          # Entry point - interactive CLI
-├── doctor_availability.csv          # Data store for appointments
-├── requirements.txt                 # Python dependencies
-├── dental_agent/
-│   ├── agent.py                     # Main agent definition & tools
-│   ├── config/
-│   │   └── settings.py              # Configuration & environment
-│   ├── models/
-│   │   └── state.py                 # State schema definitions
-│   ├── tools/
-│   │   ├── csv_reader.py            # Read operations (query tools)
-│   │   └── csv_writer.py            # Write operations (mutation tools)
-│   ├── agents/
-│   │   ├── supervisor.py            # Intent classification & routing
-│   │   ├── info_agent.py            # Information queries
-│   │   ├── booking_agent.py         # Appointment booking
-│   │   ├── cancellation_agent.py    # Appointment cancellation
-│   │   └── rescheduling_agent.py    # Appointment rescheduling
-│   └── workflows/
-│       └── graph.py                 # LangGraph workflow definition
-```
+
+The active appointment data file is `doctor_availability.csv` in the project root.
 
 ## Installation
 
-### Prerequisites
+### 1. Clone and open the project
 
-- Python 3.10 or higher
-- An xAI API key (Grok-4 model)
+```bash
+cd Appointment-System-using-LangGraph
+```
 
-### Steps
+### 2. Create and activate a virtual environment
 
-1. **Clone the repository** and navigate to the project directory:
-   ```bash
-   cd dental_agent_project
-   ```
+Windows:
 
-2. **Create a virtual environment** (recommended):
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+```bash
+python -m venv myenv
+myenv\Scripts\activate
+```
 
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+macOS/Linux:
 
-4. **Configure environment variables**:
+```bash
+python -m venv myenv
+source myenv/bin/activate
+```
 
-   Create a `.env` file in the project root with your xAI API key:
-   ```
-   XAI_API_KEY=your_api_key_here
-   MODEL_NAME=grok-4
-   TEMPERATURE=0
-   ```
+### 3. Install dependencies
 
-   You can obtain an API key from [xAI Console](https://console.x.ai/).
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 4. Configure environment variables
+
+Create a `.env` file in the project root. Do not commit this file.
+
+```env
+XAI_API_KEY=your_xai_api_key_here
+MODEL_NAME=grok-4
+TEMPERATURE=0
+```
 
 ## Usage
 
-### Running the System
-
-Start the interactive appointment management system:
+Start the CLI:
 
 ```bash
 python main.py
 ```
 
-### Example Interactions
+Type `quit`, `exit`, or `bye` to stop the application.
 
-**Check Available Slots:**
-```
-You: Show available slots for an orthodontist
-Agent: Here are the available orthodontist appointments:
-1. 5/10/2026 9:00 - Dr. Emily Johnson
-2. 5/10/2026 10:00 - Dr. Emily Johnson
-3. 5/12/2026 14:00 - Dr. Emily Johnson
-...
+## Example Commands
+
+Show available orthodontist slots:
+
+```text
+Show available slots for an orthodontist
 ```
 
-**Book an Appointment:**
-```
-You: Book patient 1000082 with Emily Johnson on 5/10/2026 9:00
-Agent: Let me check that slot first... The slot is available!
-I've booked the appointment:
-- Patient ID: 1000082
-- Doctor: Emily Johnson
-- Date/Time: 5/10/2026 9:00
-- Specialization: orthodontist
+Show slots for a doctor on a specific date:
+
+```text
+Show Emily Johnson's available schedule
 ```
 
-**Check Patient Appointments:**
-```
-You: What appointments does patient 1000048 have?
-Agent: Patient 1000048 has the following appointments:
-1. 5/8/2026 9:00 - Dr. John Doe (general_dentist)
+Show general dentist slots on a date:
+
+```text
+Show general_dentist slots on 7/8/2026
 ```
 
-**Cancel an Appointment:**
-```
-You: Cancel appointment for patient 1000082 at 5/10/2026 9:00
-Agent: I've cancelled the appointment for patient 1000082 on 5/10/2026 at 9:00.
+List doctors by specialization:
+
+```text
+Which doctors are cosmetic_dentists?
 ```
 
-**Reschedule an Appointment:**
-```
-You: Reschedule patient 1000082 from 5/10/2026 9:00 to 5/12/2026 10:00
-Agent: Let me verify the new slot is available... It's available!
-I've rescheduled the appointment:
-- Patient ID: 1000082
-- New Date/Time: 5/12/2026 10:00
-- Doctor: Emily Johnson
+Book an appointment:
+
+```text
+Book patient 1000082 with Emily Johnson on 5/10/2026 9:00
 ```
 
-## Available Specializations
+Cancel an appointment:
 
-The system supports the following dental specializations:
-- General Dentist
-- Oral Surgeon
-- Orthodontist
-- Cosmetic Dentist
-- Prosthodontist
-- Pediatric Dentist
-- Emergency Dentist
+```text
+Cancel appointment for patient 1000082 at 5/10/2026 9:00
+```
+
+Reschedule an appointment:
+
+```text
+Reschedule patient 1000082 from 5/10/2026 9:00 to 5/12/2026 10:00
+```
+
+Check a patient's appointments:
+
+```text
+What appointments does patient 1000048 have?
+```
+
+## Supported Specializations
+
+- `general_dentist`
+- `oral_surgeon`
+- `orthodontist`
+- `cosmetic_dentist`
+- `prosthodontist`
+- `pediatric_dentist`
+- `emergency_dentist`
 
 ## Data Model
 
-The appointment data is stored in `doctor_availability.csv` with the following structure:
+Appointment data is stored in `doctor_availability.csv`.
 
 | Field | Description |
-|-------|-------------|
-| date_slot | Appointment date and time (M/D/YYYY H:MM) |
-| specialization | Type of dental specialist |
-| doctor_name | Name of the dentist |
-| is_available | Boolean indicating if slot is open |
-| patient_to_attend | Patient ID if booked, empty if available |
+| --- | --- |
+| `date_slot` | Appointment date and time in `M/D/YYYY H:MM` format. |
+| `specialization` | Dental specialization. |
+| `doctor_name` | Doctor name. |
+| `is_available` | `TRUE` for open slots and `FALSE` for booked slots. |
+| `patient_to_attend` | Patient ID for booked slots. Empty for available slots. |
 
-## For Students: How the Flow Works
+## Booking Rules
 
-Understanding this system helps demonstrate several key AI engineering concepts:
+- The booking agent checks availability before creating an appointment.
+- A slot must be available before it can be booked.
+- Cancellation requires a patient ID and exact appointment time.
+- Rescheduling requires the existing appointment, new date/time, and doctor name.
+- Date and time values should use `M/D/YYYY H:MM`, for example `5/10/2026 9:00`.
 
-### 1. Intent Classification
+## Git Ignore Rules
 
-When a user sends a message, the Supervisor agent analyzes the text to determine what action the user wants. This is done using structured output parsing, where the LLM returns a JSON object with:
-- `intent`: The type of request (get_info, book, cancel, reschedule, end)
-- `next_agent`: Which specialized agent should handle it
-- `reasoning`: Explanation of the decision
+The repository ignores these local files and generated files:
 
-### 2. Tool Use in Agents
+- `.env`
+- `myenv/`
+- `__pycache__/`
+- `*.pyc`
 
-Each specialized agent has access to specific tools. For example, the Info Agent can query available slots, but cannot book appointments. This demonstrates the principle of least privilege in agent design.
+Do not commit API keys, virtual environments, or Python cache files.
 
-### 3. State Management
+## Troubleshooting
 
-LangGraph maintains conversation state across all agents. The state includes:
-- Message history (for context)
-- Current intent and routing decision
-- Parameters collected during booking (patient_id, doctor, date)
-- Tool execution results
-- Final responses
+### Missing API key
 
-### 4. Conditional Routing
+If the app fails with an API key error, add this to `.env`:
 
-The graph uses conditional edges to determine flow:
-- After supervisor: Route based on classified intent
-- After agent: Continue to tools if needed, or end if response is complete
+```env
+XAI_API_KEY=your_xai_api_key_here
+```
 
-### 5. Data Layer Abstraction
+### Missing package
 
-Tools provide an abstraction layer over the CSV data, making it easy to:
-- Change the data source (e.g., to a database)
-- Add validation
-- Modify query logic without changing agent code
+If Python reports `ModuleNotFoundError: No module named 'langchain_xai'`, reinstall dependencies:
 
-## Configuration
+```bash
+pip install -r requirements.txt
+```
 
-Environment variables can be set in `.env`:
+### CSV date errors
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| XAI_API_KEY | Your xAI API key | Required |
-| MODEL_NAME | LLM model to use | grok-4 |
-| TEMPERATURE | LLM creativity (0=deterministic) | 0 |
-
-## License
-
-This project is provided for educational purposes.
+Do not manually change `date_slot` values unless they follow `M/D/YYYY H:MM` format.

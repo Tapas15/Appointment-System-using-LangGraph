@@ -1,6 +1,7 @@
 import pandas as pd
 from langchain_core.tools import tool
 from dental_agent.config.settings import CSV_PATH, DATE_FORMAT
+from dental_agent.utils import format_date_slot
 
 
 def _load_df() -> pd.DataFrame:
@@ -52,7 +53,7 @@ def get_available_slots(
             pass
 
     result = df[mask][["date_slot", "specialization", "doctor_name"]].copy()
-    result["date_slot"] = result["date_slot"].dt.strftime("%-m/%-d/%Y %-H:%M")
+    result["date_slot"] = result["date_slot"].map(format_date_slot)
     return result.head(20).to_dict(orient="records")
 
 
@@ -70,7 +71,7 @@ def get_patient_appointments(patient_id: str) -> list:
     df = _load_df()
     mask = df["patient_to_attend"] == str(patient_id).strip()
     result = df[mask][["date_slot", "specialization", "doctor_name", "patient_to_attend"]].copy()
-    result["date_slot"] = result["date_slot"].dt.strftime("%-m/%-d/%Y %-H:%M")
+    result["date_slot"] = result["date_slot"].map(format_date_slot)
     return result.to_dict(orient="records")
 
 
