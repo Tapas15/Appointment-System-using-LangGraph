@@ -69,8 +69,11 @@ def _pre_model_hook(state: dict) -> dict:
 
 
 def create_dental_graph(api_key: str | None = None, model_name: str | None = None, temperature: float = TEMPERATURE):
-    llm = ChatGroq(api_key=api_key or GROQ_API_KEY, model=model_name or MODEL_NAME, temperature=temperature)
+    resolved_api_key = api_key or GROQ_API_KEY
+    if not resolved_api_key:
+        raise ValueError("GROQ_API_KEY is required. Add it in the Streamlit sidebar or Hugging Face Space secrets.")
+    llm = ChatGroq(api_key=resolved_api_key, model=model_name or MODEL_NAME, temperature=temperature)
     return create_react_agent(model=llm, tools=TOOLS, pre_model_hook=_pre_model_hook)
 
 
-dental_graph = create_dental_graph()
+dental_graph = create_dental_graph() if GROQ_API_KEY else None
