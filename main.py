@@ -1,5 +1,5 @@
 """
-Dental Appointment System — powered by LangGraph + Grok
+Dental Appointment System — powered by LangGraph + Groq
 """
 
 from dotenv import load_dotenv
@@ -11,7 +11,7 @@ from dental_agent.agent import dental_graph
 BANNER = """
 ╔══════════════════════════════════════════════════════════╗
 ║         Dental Appointment Management System             ║
-║         Powered by LangGraph + Grok-4 (xAI)              ║
+║         Powered by LangGraph + Groq                       ║
 ╚══════════════════════════════════════════════════════════╝
 Available commands:
   • Show available slots for an orthodontist

@@ -65,7 +65,7 @@ The system uses a shared state object that flows through the graph:
 
 ### [`dental_agent/agent.py`](Dental-Appointment-System-using-LangGraph/dental_agent/agent.py)
 - Creates the main LangGraph React agent
-- Uses `ChatGroq` (or `ChatXAI`) as the LLM
+- Uses `ChatGroq` as the LLM
 - Defines the system prompt with booking rules
 - Implements a pre-model hook for message sanitization
 

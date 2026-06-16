@@ -1,6 +1,6 @@
 # Dental Appointment Management System
 
-A conversational dental appointment management system built with LangGraph and xAI Grok. The application uses a multi-agent graph to route patient requests to specialized agents for availability lookup, booking, cancellation, and rescheduling.
+A conversational dental appointment management system built with LangGraph and Groq. The application uses a multi-agent graph to route patient requests to specialized agents for availability lookup, booking, cancellation, and rescheduling.
 
 ## Features
 
@@ -42,7 +42,7 @@ Supervisor ── intent classification and routing
 - Python 3.10+
 - LangGraph
 - LangChain
-- xAI Grok model through `langchain-xai`
+- Groq LLM through `langchain-groq`
 - Pandas for CSV-based data handling
 - Pydantic for structured routing decisions
 - `python-dotenv` for local environment configuration
@@ -116,8 +116,8 @@ pip install -r requirements.txt
 Create a `.env` file in the project root. Do not commit this file.
 
 ```env
-XAI_API_KEY=your_xai_api_key_here
-MODEL_NAME=grok-4
+GROQ_API_KEY=your_groq_api_key_here
+MODEL_NAME=openai/gpt-oss-120b
 TEMPERATURE=0
 ```
 
@@ -229,7 +229,7 @@ Do not commit API keys, virtual environments, or Python cache files.
 If the app fails with an API key error, add this to `.env`:
 
 ```env
-XAI_API_KEY=your_xai_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
 ```
 
 ### Missing package

@@ -19,7 +19,7 @@ def format_date_slot(value) -> str:
 
 def sanitize_messages(messages: List[BaseMessage]) -> List[BaseMessage]:
     """
-    xAI (grok) API rejects any message with empty/null content.
+    Groq API rejects any message with empty/null content.
     Replace empty content (None, "", or []) with a single space so the API
     accepts the message while preserving all other metadata.
     """
