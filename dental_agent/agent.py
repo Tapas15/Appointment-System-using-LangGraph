@@ -68,5 +68,9 @@ def _pre_model_hook(state: dict) -> dict:
     return {"llm_input_messages": [SystemMessage(content=SYSTEM_PROMPT)] + sanitized}
 
 
-llm = ChatGroq(api_key=GROQ_API_KEY, model=MODEL_NAME, temperature=TEMPERATURE)
-dental_graph = create_react_agent(model=llm, tools=TOOLS, pre_model_hook=_pre_model_hook)
+def create_dental_graph(api_key: str | None = None, model_name: str | None = None, temperature: float = TEMPERATURE):
+    llm = ChatGroq(api_key=api_key or GROQ_API_KEY, model=model_name or MODEL_NAME, temperature=temperature)
+    return create_react_agent(model=llm, tools=TOOLS, pre_model_hook=_pre_model_hook)
+
+
+dental_graph = create_dental_graph()
