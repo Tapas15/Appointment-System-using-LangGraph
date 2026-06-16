@@ -1,3 +1,9 @@
+---
+title: Dental Appointment
+sdk: docker
+pinned: false
+---
+
 # Dental Appointment Management System
 
 A conversational dental appointment management system built with LangGraph and Groq. The application uses a multi-agent graph to route patient requests to specialized agents for availability lookup, booking, cancellation, and rescheduling.
