@@ -34,4 +34,24 @@ VALID_DOCTORS = [
     "kevin anderson",
 ]
 
+DEFAULT_DOCTOR_PASSWORD = os.getenv("DEFAULT_DOCTOR_PASSWORD", "doctor123")
+DOCTOR_PASSWORDS = {
+    doctor_name.lower(): DEFAULT_DOCTOR_PASSWORD
+    for doctor_name in VALID_DOCTORS
+}
+
 DATE_FORMAT = "%m/%d/%Y %H:%M"
+
+
+def get_chat_groq(
+    api_key: str | None = None,
+    model_name: str | None = None,
+    temperature: float | None = None,
+):
+    from langchain_groq import ChatGroq
+
+    return ChatGroq(
+        api_key=api_key or GROQ_API_KEY,
+        model=model_name or MODEL_NAME,
+        temperature=TEMPERATURE if temperature is None else temperature,
+    )

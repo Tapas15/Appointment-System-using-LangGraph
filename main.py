@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from langchain_core.messages import HumanMessage, AIMessageChunk
-from dental_agent.agent import dental_graph
+from dental_agent.workflows.graph import dental_graph
 
 BANNER = """
 ╔══════════════════════════════════════════════════════════╗
@@ -22,6 +22,7 @@ Available commands:
   • Book patient 1000082 with Emily Johnson on 5/10/2026 9:00
   • Cancel appointment for patient 1000082 at 5/10/2026 9:00
   • Reschedule patient 1000082 from 5/10/2026 9:00 to 5/12/2026 10:00
+  • Doctor: block John Doe slot on 5/10/2026 9:00 with password doctor123
   • What appointments does patient 1000048 have?
 
 Type 'quit' to exit.

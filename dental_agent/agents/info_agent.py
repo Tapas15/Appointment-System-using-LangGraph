@@ -1,8 +1,8 @@
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import AIMessage
 from langgraph.prebuilt import ToolNode
-from dental_agent.config.settings import GROQ_API_KEY, MODEL_NAME, TEMPERATURE
+from dental_agent.config.settings import get_chat_groq
+from dental_agent.config.runtime import get_graph_settings
 from dental_agent.models.state import AppointmentState
 from dental_agent.tools.csv_reader import (
     get_available_slots,
@@ -57,10 +57,11 @@ info_tool_node = ToolNode(tools=INFO_TOOLS)
 
 
 def info_agent_node(state: AppointmentState) -> dict:
-    llm = ChatGroq(
-        api_key=GROQ_API_KEY,
-        model=MODEL_NAME,
-        temperature=TEMPERATURE,
+    settings = get_graph_settings()
+    llm = get_chat_groq(
+        api_key=settings["api_key"],
+        model_name=settings["model_name"],
+        temperature=settings["temperature"],
     ).bind_tools(INFO_TOOLS)
 
     chain = INFO_PROMPT | llm

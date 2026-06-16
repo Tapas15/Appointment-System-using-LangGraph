@@ -1,7 +1,7 @@
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.prebuilt import ToolNode
-from dental_agent.config.settings import GROQ_API_KEY, MODEL_NAME, TEMPERATURE
+from dental_agent.config.settings import get_chat_groq
+from dental_agent.config.runtime import get_graph_settings
 from dental_agent.models.state import AppointmentState
 from dental_agent.tools.csv_reader import get_patient_appointments
 from dental_agent.tools.csv_writer import cancel_appointment
@@ -47,10 +47,11 @@ cancellation_tool_node = ToolNode(tools=CANCEL_TOOLS)
 
 
 def cancellation_agent_node(state: AppointmentState) -> dict:
-    llm = ChatGroq(
-        api_key=GROQ_API_KEY,
-        model=MODEL_NAME,
-        temperature=TEMPERATURE,
+    settings = get_graph_settings()
+    llm = get_chat_groq(
+        api_key=settings["api_key"],
+        model_name=settings["model_name"],
+        temperature=settings["temperature"],
     ).bind_tools(CANCEL_TOOLS)
 
     chain = CANCEL_PROMPT | llm

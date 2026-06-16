@@ -3,8 +3,8 @@ import os
 import streamlit as st
 from langchain_core.messages import AIMessageChunk, HumanMessage
 
-from dental_agent.agent import create_dental_graph
-from dental_agent.config.settings import MODEL_NAME
+from dental_agent.config.runtime import configure_graph
+from dental_agent.workflows.graph import dental_graph
 
 st.set_page_config(page_title="Dental Appointment Chat", layout="wide")
 
@@ -47,7 +47,7 @@ with st.sidebar:
         type="password",
         help="The key is used only in this Streamlit session.",
     )
-    model_input = st.text_input("Model", value=os.getenv("MODEL_NAME", MODEL_NAME))
+    model_input = st.text_input("Model", value=os.getenv("MODEL_NAME", "openai/gpt-oss-120b"))
 
     if st.button("Apply settings", type="primary"):
         st.session_state["api_key"] = api_key_input
@@ -94,7 +94,7 @@ for message in st.session_state["ui_messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-prompt = st.chat_input("Ask about available slots, doctors, booking, cancellation, or rescheduling.")
+prompt = st.chat_input("Ask about available slots, doctors, booking, cancellation, rescheduling, or doctor schedule updates.")
 
 if prompt:
     if not st.session_state["api_key"]:
@@ -114,10 +114,12 @@ if prompt:
         response_box = st.empty()
         full_response = ""
         final_messages = None
-        graph = create_dental_graph(
+        configure_graph(
             api_key=st.session_state["api_key"],
             model_name=st.session_state["model"],
+            temperature=0,
         )
+        graph = dental_graph
 
         try:
             for event_type, data in graph.stream(

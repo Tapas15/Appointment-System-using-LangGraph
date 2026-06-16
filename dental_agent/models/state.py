@@ -16,6 +16,7 @@ RouteTarget = Literal[
     "booking_agent",
     "cancellation_agent",
     "rescheduling_agent",
+    "doctor_agent",
     "end",
 ]
 

@@ -7,12 +7,13 @@ from dental_agent.agents.info_agent import info_agent_node, info_tool_node
 from dental_agent.agents.booking_agent import booking_agent_node, booking_tool_node
 from dental_agent.agents.cancellation_agent import cancellation_agent_node, cancellation_tool_node
 from dental_agent.agents.rescheduling_agent import rescheduling_agent_node, rescheduling_tool_node
+from dental_agent.agents.doctor_agent import doctor_agent_node, doctor_tool_node
 
 
 def route_from_supervisor(state: AppointmentState) -> str:
     """Read next_agent from state and return the corresponding node name."""
     target = state.get("next_agent", "info_agent")
-    valid = {"info_agent", "booking_agent", "cancellation_agent", "rescheduling_agent", "end"}
+    valid = {"info_agent", "booking_agent", "cancellation_agent", "rescheduling_agent", "doctor_agent", "end"}
     return target if target in valid else "info_agent"
 
 
@@ -41,6 +42,8 @@ def build_graph():
     graph.add_node("cancellation_tools", cancellation_tool_node)
     graph.add_node("rescheduling_agent", rescheduling_agent_node)
     graph.add_node("rescheduling_tools", rescheduling_tool_node)
+    graph.add_node("doctor_agent", doctor_agent_node)
+    graph.add_node("doctor_tools", doctor_tool_node)
 
     # Entry point
     graph.add_edge(START, "supervisor")
@@ -54,6 +57,7 @@ def build_graph():
             "booking_agent": "booking_agent",
             "cancellation_agent": "cancellation_agent",
             "rescheduling_agent": "rescheduling_agent",
+            "doctor_agent": "doctor_agent",
             "end": END,
         },
     )
@@ -89,6 +93,14 @@ def build_graph():
         {"tools": "rescheduling_tools", "end": END},
     )
     graph.add_edge("rescheduling_tools", "rescheduling_agent")
+
+    # Doctor agent loop
+    graph.add_conditional_edges(
+        "doctor_agent",
+        _should_continue,
+        {"tools": "doctor_tools", "end": END},
+    )
+    graph.add_edge("doctor_tools", "doctor_agent")
 
     return graph.compile()
 
