@@ -1,3 +1,4 @@
+﻿import time
 import pandas as pd
 from langchain_core.tools import tool
 
@@ -63,6 +64,32 @@ def _verify_doctor(doctor_name: str, password: str) -> tuple[bool, str]:
     return True, "Authenticated"
 
 
+
+@tool
+def doctor_login(doctor_name: str, password: str) -> dict:
+    """
+    Verify doctor credentials and start a doctor session.
+
+    This tool does not modify the CSV. It only confirms that the provided
+    doctor name and password are valid.
+    """
+    verified, message = _verify_doctor(doctor_name, password)
+
+    if not verified:
+        return {
+            "success": False,
+            "authenticated": False,
+            "message": message,
+        }
+
+    return {
+        "success": True,
+        "authenticated": True,
+        "doctor_name": doctor_name.lower().strip(),
+        "doctor_session_started_at": time.time(),
+        "last_doctor_activity_at": time.time(),
+        "message": f"Logged in as {doctor_name.lower().strip()}.",
+    }
 def _slot_mask(df: pd.DataFrame, doctor_name: str, date_slot: str) -> tuple[pd.Series, str | None]:
     doctor = doctor_name.lower().strip()
 
@@ -276,3 +303,4 @@ def doctor_update_schedule(
         "success": True,
         "message": f"Schedule updated for {doctor_name} at {date_slot}. Slot is now {status}.",
     }
+

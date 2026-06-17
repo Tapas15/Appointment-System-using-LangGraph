@@ -21,6 +21,11 @@ VALID_SPECIALIZATIONS = [
     "emergency_dentist",
 ]
 
+ADMIN_USERS = {
+    "admin": os.getenv("ADMIN_PASSWORD", "admin123"),
+    "superadmin": os.getenv("SUPERADMIN_PASSWORD", "superadmin123"),
+}
+
 VALID_DOCTORS = [
     "john doe",
     "emily johnson",

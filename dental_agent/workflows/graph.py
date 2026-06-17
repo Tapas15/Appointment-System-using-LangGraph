@@ -1,4 +1,4 @@
-from langgraph.graph import StateGraph, START, END
+﻿from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import AIMessage
 
 from dental_agent.models.state import AppointmentState
@@ -8,13 +8,50 @@ from dental_agent.agents.booking_agent import booking_agent_node, booking_tool_n
 from dental_agent.agents.cancellation_agent import cancellation_agent_node, cancellation_tool_node
 from dental_agent.agents.rescheduling_agent import rescheduling_agent_node, rescheduling_tool_node
 from dental_agent.agents.doctor_agent import doctor_agent_node, doctor_tool_node
+from dental_agent.agents.admin_agent import admin_agent_node, admin_tool_node
+
+
+
+def _last_message_text(state: AppointmentState) -> str:
+    messages = state.get("messages", [])
+    if not messages:
+        return ""
+    return str(getattr(messages[-1], "content", ""))
+
+
+def _is_logout_request(state: AppointmentState) -> bool:
+    normalized = _last_message_text(state).strip().lower()
+    return normalized in {
+        "logout",
+        "log out",
+        "doctor logout",
+        "doctor log out",
+        "sign out",
+        "exit doctor mode",
+        "logout doctor mode",
+    }
 
 
 def route_from_supervisor(state: AppointmentState) -> str:
     """Read next_agent from state and return the corresponding node name."""
+    if state.get("admin_session_role") == "admin":
+        return "admin_agent"
+
+    if state.get("session_role") == "doctor":
+        return "doctor_agent"
+
     target = state.get("next_agent", "info_agent")
-    valid = {"info_agent", "booking_agent", "cancellation_agent", "rescheduling_agent", "doctor_agent", "end"}
+    valid = {
+        "info_agent",
+        "booking_agent",
+        "cancellation_agent",
+        "rescheduling_agent",
+        "doctor_agent",
+        "admin_agent",
+        "end",
+    }
     return target if target in valid else "info_agent"
+
 
 
 def _should_continue(state: AppointmentState) -> str:
@@ -44,6 +81,9 @@ def build_graph():
     graph.add_node("rescheduling_tools", rescheduling_tool_node)
     graph.add_node("doctor_agent", doctor_agent_node)
     graph.add_node("doctor_tools", doctor_tool_node)
+    graph.add_node("admin_agent", admin_agent_node)
+    graph.add_node("admin_tools", admin_tool_node)
+
 
     # Entry point
     graph.add_edge(START, "supervisor")
@@ -58,11 +98,13 @@ def build_graph():
             "cancellation_agent": "cancellation_agent",
             "rescheduling_agent": "rescheduling_agent",
             "doctor_agent": "doctor_agent",
+            "admin_agent": "admin_agent",
             "end": END,
+
         },
     )
 
-    # Info agent loop: agent → tools → agent → END
+    # Info agent loop: agent -> tools -> agent -> END
     graph.add_conditional_edges(
         "info_agent",
         _should_continue,
@@ -94,7 +136,7 @@ def build_graph():
     )
     graph.add_edge("rescheduling_tools", "rescheduling_agent")
 
-    # Doctor agent loop
+    # Doctor agent loop: agent -> tools -> agent -> END
     graph.add_conditional_edges(
         "doctor_agent",
         _should_continue,
@@ -102,7 +144,16 @@ def build_graph():
     )
     graph.add_edge("doctor_tools", "doctor_agent")
 
+    # Admin agent loop: agent -> tools -> agent -> END
+    graph.add_conditional_edges(
+        "admin_agent",
+        _should_continue,
+        {"tools": "admin_tools", "end": END},
+    )
+    graph.add_edge("admin_tools", "admin_agent")
+
     return graph.compile()
+
 
 
 dental_graph = build_graph()

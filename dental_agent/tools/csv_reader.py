@@ -149,3 +149,136 @@ def get_available_doctors_by_date(date_filter: str) -> list:
         .reset_index(name="available_count")
     )
     return result.to_dict(orient="records")
+
+
+@tool
+def get_available_slots_range(
+    start_date: str = "",
+    end_date: str = "",
+    specialization: str = "",
+    doctor_name: str = "",
+    limit: int = 50,
+) -> list:
+    """
+    Return available slots within an optional patient-facing date range.
+
+    Args:
+        start_date: Optional start date M/D/YYYY, e.g. '7/8/2026'.
+        end_date: Optional end date M/D/YYYY, e.g. '7/10/2026'.
+        specialization: Optional filter by specialization.
+        doctor_name: Optional filter by doctor name.
+        limit: Maximum rows to return. Defaults to 50.
+
+    Returns:
+        List of dicts with keys: date_slot, specialization, doctor_name.
+    """
+    df = _load_df()
+    mask = df["is_available"]
+
+    try:
+        if start_date:
+            start = pd.to_datetime(start_date).date()
+            mask = mask & (df["date_slot"].dt.date >= start)
+        if end_date:
+            end = pd.to_datetime(end_date).date()
+            mask = mask & (df["date_slot"].dt.date <= end)
+    except Exception:
+        return []
+
+    if specialization:
+        mask = mask & (df["specialization"] == specialization.lower().strip())
+    if doctor_name:
+        mask = mask & (df["doctor_name"] == doctor_name.lower().strip())
+
+    result = df[mask][["date_slot", "specialization", "doctor_name"]].copy()
+    result = result.sort_values("date_slot")
+    result["date_slot"] = result["date_slot"].map(format_date_slot)
+    return result.head(limit).to_dict(orient="records")
+
+
+@tool
+def get_specialty_summary(date_filter: str = "") -> list:
+    """
+    Return a patient-facing summary of all specialties.
+
+    Args:
+        date_filter: Optional date string M/D/YYYY, e.g. '7/8/2026'.
+                     Leave empty to search across all dates.
+
+    Returns:
+        List of dicts:
+        - specialization
+        - available_doctors
+        - available_slots
+    """
+    df = _load_df()
+    mask = df["is_available"]
+
+    if date_filter:
+        try:
+            target_date = pd.to_datetime(date_filter).date()
+            mask = mask & (df["date_slot"].dt.date == target_date)
+        except Exception:
+            return []
+
+    summary = (
+        df[mask]
+        .groupby("specialization")
+        .agg(
+            available_doctors=("doctor_name", "nunique"),
+            available_slots=("doctor_name", "size"),
+        )
+        .reset_index()
+        .sort_values("specialization")
+    )
+
+    return summary.to_dict(orient="records")
+
+
+@tool
+def get_total_available_doctors(
+    date_filter: str = "",
+    specialization: str = "",
+) -> dict:
+    """
+    Return total patient-facing availability counts.
+
+    Args:
+        date_filter: Optional date string M/D/YYYY, e.g. '7/8/2026'.
+        specialization: Optional specialization filter, e.g. 'orthodontist'.
+
+    Returns:
+        Dict with:
+        - total_specializations
+        - total_doctors_available
+        - total_available_slots
+    """
+    df = _load_df()
+    mask = df["is_available"]
+
+    if specialization:
+        mask = mask & (df["specialization"] == specialization.lower().strip())
+
+    if date_filter:
+        try:
+            target_date = pd.to_datetime(date_filter).date()
+            mask = mask & (df["date_slot"].dt.date == target_date)
+        except Exception:
+            return {
+                "date_filter": date_filter,
+                "specialization": specialization,
+                "total_specializations": 0,
+                "total_doctors_available": 0,
+                "total_available_slots": 0,
+            }
+
+    available = df[mask]
+
+    return {
+        "date_filter": date_filter,
+        "specialization": specialization,
+        "total_specializations": int(available["specialization"].nunique()),
+        "total_doctors_available": int(available["doctor_name"].nunique()),
+        "total_available_slots": int(len(available)),
+    }
+

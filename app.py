@@ -1,4 +1,4 @@
-import os
+﻿import os
 
 import streamlit as st
 from langchain_core.messages import AIMessageChunk, HumanMessage
@@ -54,12 +54,9 @@ with st.sidebar:
         st.session_state["model"] = model_input
         st.session_state["history"] = []
         st.session_state["ui_messages"] = []
+        st.session_state["state_snapshot"] = {"messages": []}
         st.rerun()
 
-    if st.button("Clear chat"):
-        st.session_state["history"] = []
-        st.session_state["ui_messages"] = []
-        st.rerun()
 
 if "api_key" not in st.session_state:
     st.session_state["api_key"] = api_key_input
@@ -69,6 +66,8 @@ if "history" not in st.session_state:
     st.session_state["history"] = []
 if "ui_messages" not in st.session_state:
     st.session_state["ui_messages"] = []
+if "state_snapshot" not in st.session_state:
+    st.session_state["state_snapshot"] = {"messages": st.session_state["history"]}
 
 
 def normalize_content(content):
@@ -94,7 +93,8 @@ for message in st.session_state["ui_messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-prompt = st.chat_input("Ask about available slots, doctors, booking, cancellation, rescheduling, or doctor schedule updates.")
+prompt = st.chat_input('Ask about slots, doctors, booking, cancellation, rescheduling, or type "I am doctor" / "logout".')
+
 
 if prompt:
     if not st.session_state["api_key"]:
@@ -123,7 +123,7 @@ if prompt:
 
         try:
             for event_type, data in graph.stream(
-                {"messages": st.session_state["history"]},
+                st.session_state["state_snapshot"],
                 stream_mode=["messages", "values"],
                 config={"recursion_limit": 20},
             ):
@@ -137,13 +137,15 @@ if prompt:
                         content = normalize_content(chunk.content)
                         if content:
                             full_response += content
-                            response_box.markdown(full_response + "▌")
+                            response_box.markdown(full_response + "|")
                 elif event_type == "values":
                     final_messages = data.get("messages", [])
+                    st.session_state["state_snapshot"] = data
 
             response_box.markdown(full_response)
 
             if final_messages:
+                st.session_state["state_snapshot"]["messages"] = final_messages
                 st.session_state["history"] = final_messages
             if full_response:
                 st.session_state["ui_messages"].append(
@@ -153,3 +155,5 @@ if prompt:
             response_box.markdown(f"**Error:** `{exc}`")
             if st.session_state["history"]:
                 st.session_state["history"].pop()
+
+
