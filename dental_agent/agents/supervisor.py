@@ -3,7 +3,9 @@ from pydantic import BaseModel, Field
 from dental_agent.config.settings import get_chat_groq
 from dental_agent.config.runtime import get_graph_settings
 from dental_agent.models.state import AppointmentState, RouteTarget
+from dental_agent.agents.admin_agent import _is_simple_admin_login_request
 from dental_agent.utils import sanitize_messages
+
 
 
 class SupervisorDecision(BaseModel):
@@ -34,7 +36,7 @@ Your ONLY job is to analyze the user's latest message and classify their intent,
 - cancel        -> cancellation_agent   : User wants to cancel / remove an existing appointment.
 - reschedule    -> rescheduling_agent   : User wants to move / change an existing appointment to a different time.
 - doctor        -> doctor_agent         : User says they are a doctor, wants doctor login, or wants to add availability, block slots, or update schedule.
-- admin         -> admin_agent          : User wants admin login/logout, enable/disable patient or doctor features, or admin-controlled patient/doctor work.
+- admin         -> admin_agent          : User wants admin login/logout, says "I am admin", provides admin password, enable/disable patient or doctor features, or admin-controlled patient/doctor work.
 - end           -> end                  : User says goodbye, thanks, says they're done, or the conversation is fully resolved.
 
 - unknown       -> info_agent           : Ambiguous intent; default to info_agent for clarification.
@@ -57,7 +59,15 @@ SUPERVISOR_PROMPT = ChatPromptTemplate.from_messages([
 
 
 def supervisor_node(state: AppointmentState) -> dict:
+    messages = sanitize_messages(state["messages"])
+    if messages and _is_simple_admin_login_request(str(messages[-1].content)):
+        return {
+            "intent": "admin",
+            "next_agent": "admin_agent",
+        }
+
     settings = get_graph_settings()
+
     llm = get_chat_groq(
         api_key=settings["api_key"],
         model_name=settings["model_name"],
@@ -65,7 +75,8 @@ def supervisor_node(state: AppointmentState) -> dict:
     ).with_structured_output(SupervisorDecision)
 
     chain = SUPERVISOR_PROMPT | llm
-    decision: SupervisorDecision = chain.invoke({"messages": sanitize_messages(state["messages"])})
+    decision: SupervisorDecision = chain.invoke({"messages": messages})
+
 
     return {
         "intent": decision.intent,

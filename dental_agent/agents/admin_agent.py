@@ -1,4 +1,5 @@
 import json
+import re
 import time
 
 from langchain_core.messages import AIMessage, ToolMessage
@@ -156,6 +157,57 @@ def _is_logout_request(text: str) -> bool:
     }
 
 
+def _is_simple_admin_login_request(text: str) -> bool:
+    normalized = text.strip().lower()
+    return any(
+        phrase in normalized
+        for phrase in [
+            "i am admin",
+            "i am a admin",
+            "im admin",
+            "im a admin",
+            "i am the admin",
+            "login as admin",
+            "admin login",
+        ]
+    )
+
+
+def _extract_admin_password(text: str) -> str | None:
+    normalized = text.strip().lower()
+    patterns = [
+        r"password\s+is\s+([^\s.]+)",
+        r"password\s*:?\s*([^\s.]+)",
+        r"my\s+password\s+is\s+([^\s.]+)",
+        r"here\s+is\s+my\s+password\s+([^\s.]+)",
+        r"admin\s+password\s+([^\s.]+)",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, normalized)
+        if match:
+            return match.group(1)
+
+    return None
+
+
+def _admin_login_tool_call(password: str) -> AIMessage:
+    return AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": admin_login.name,
+                "args": {
+                    "admin_user_id": "admin",
+                    "password": password,
+                },
+                "id": "call_admin_login",
+                "type": "tool_call",
+            }
+        ],
+    )
+
+
 def _is_admin_session_expired(state: AppointmentState) -> bool:
     if state.get("admin_session_role") != "admin":
         return False
@@ -179,6 +231,10 @@ def _is_feature_toggle_request(text: str) -> bool:
             "enable feature",
             "disable feature",
             "list features",
+            "i am admin",
+            "i am a admin",
+            "im admin",
+            "im a admin",
             "admin login",
             "login as admin",
         ]
@@ -549,6 +605,20 @@ def admin_agent_node(state: AppointmentState) -> dict:
     pending_tool_update = _tool_result_state_update(state)
     if pending_tool_update:
         state = {**state, **pending_tool_update}
+
+    if state.get("admin_session_role") != "admin" and _is_simple_admin_login_request(text):
+        password = _extract_admin_password(text)
+        if not password:
+            message = "Please provide your admin password, for example: I am a admin, here is my password admin123"
+            return {
+                "messages": [AIMessage(content=message)],
+                "final_response": message,
+            }
+
+        return {
+            "messages": [_admin_login_tool_call(password)],
+            "final_response": None,
+        }
 
     if (
         state.get("admin_session_role") != "admin"

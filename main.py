@@ -24,7 +24,7 @@ Available commands:
   • Reschedule patient 1000082 from 5/10/2026 9:00 to 5/12/2026 10:00
   • Doctor login: I am doctor
   • Doctor: block John Doe slot on 5/10/2026 9:00 with password doctor123
-  • Admin login: admin login user_id admin password admin123
+  • Admin login: I am a admin, here is my password admin123
   • Admin: list features
   • Admin: enable feature book_appointment
   • Admin: disable feature cancel_appointment
