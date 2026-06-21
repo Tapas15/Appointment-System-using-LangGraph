@@ -1,13 +1,14 @@
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import AIMessage
 from langgraph.prebuilt import ToolNode
+from dental_agent.config.features import load_global_features
 from dental_agent.config.settings import get_chat_groq
 from dental_agent.config.runtime import get_graph_settings
 from dental_agent.models.state import AppointmentState
-from dental_agent.tools.csv_reader import get_patient_appointments, get_available_slots
-from dental_agent.tools.csv_writer import reschedule_appointment
+from dental_agent.tools.storage_factory import build_rescheduling_tools
 from dental_agent.utils import sanitize_messages
 
-RESCHEDULE_TOOLS = [get_patient_appointments, get_available_slots, reschedule_appointment]
+RESCHEDULE_TOOLS = build_rescheduling_tools()
 
 RESCHEDULE_SYSTEM = """You are the Rescheduling Agent for a dental appointment management system.
 
@@ -49,6 +50,14 @@ rescheduling_tool_node = ToolNode(tools=RESCHEDULE_TOOLS)
 
 
 def rescheduling_agent_node(state: AppointmentState) -> dict:
+    global_features = state.get("global_enabled_features") or load_global_features()
+    if not global_features.get("reschedule_appointment", True):
+        message = "This feature is disabled globally by admin: reschedule_appointment"
+        return {
+            "messages": [AIMessage(content=message)],
+            "final_response": message,
+        }
+
     settings = get_graph_settings()
     llm = get_chat_groq(
         api_key=settings["api_key"],
@@ -62,3 +71,4 @@ def rescheduling_agent_node(state: AppointmentState) -> dict:
         "messages": [response],
         "final_response": response.content if not response.tool_calls else None,
     }
+

@@ -1,0 +1,21 @@
+{
+  "admin_disable_feature": true,
+  "admin_enable_feature": true,
+  "admin_list_features": true,
+  "book_appointment": true,
+  "cancel_appointment": true,
+  "check_slot_availability": true,
+  "doctor_add_availability": true,
+  "doctor_block_slot": true,
+  "doctor_update_schedule": true,
+  "reschedule_appointment": true,
+  "view_availability_summary": true,
+  "view_available_doctors_by_date": true,
+  "view_available_slots": true,
+  "view_doctors_by_specialization": true,
+  "view_patient_appointments": true, 
+  "view_slots_by_date": true,
+  "view_slots_by_date_range": true,
+  "view_slots_by_doctor": true,
+  "view_slots_by_specialization": true
+}

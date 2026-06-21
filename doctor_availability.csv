@@ -152,7 +152,7 @@ date_slot,specialization,doctor_name,is_available,patient_to_attend
 7/8/2026 11:00,oral_surgeon,robert martinez,TRUE,
 7/8/2026 11:30,oral_surgeon,robert martinez,TRUE,
 7/8/2026 12:00,oral_surgeon,robert martinez,TRUE,
-7/8/2026 12:30,oral_surgeon,robert martinez,FALSE,1000099
+7/8/2026 12:30,oral_surgeon,robert martinez,TRUE,
 7/8/2026 13:00,oral_surgeon,robert martinez,TRUE,
 7/8/2026 13:30,oral_surgeon,robert martinez,TRUE,
 7/8/2026 14:00,oral_surgeon,robert martinez,FALSE,1000084
@@ -179,4 +179,7 @@ date_slot,specialization,doctor_name,is_available,patient_to_attend
 7/8/2026 15:30,orthodontist,kevin anderson,TRUE,
 7/8/2026 16:00,orthodontist,kevin anderson,TRUE,
 7/8/2026 16:30,orthodontist,kevin anderson,FALSE,1000001
-7/9/2026 0:00,emergency_dentist,daniel miller,,
+7/9/2026 0:00,emergency_dentist,daniel miller,FALSE,
+7/8/2026 17:00,general_dentist,emily johnson,FALSE,
+7/8/2026 18:00,general_dentist,emily johnson,FALSE,
+7/8/2026 18:30,general_dentist,emily johnson,TRUE,

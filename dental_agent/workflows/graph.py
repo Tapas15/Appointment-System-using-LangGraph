@@ -1,8 +1,10 @@
 ﻿from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import AIMessage
 
+from dental_agent.config.features import load_global_features
 from dental_agent.models.state import AppointmentState
 from dental_agent.agents.supervisor import supervisor_node
+
 from dental_agent.agents.info_agent import info_agent_node, info_tool_node
 from dental_agent.agents.booking_agent import booking_agent_node, booking_tool_node
 from dental_agent.agents.cancellation_agent import cancellation_agent_node, cancellation_tool_node
@@ -17,6 +19,40 @@ def _last_message_text(state: AppointmentState) -> str:
     if not messages:
         return ""
     return str(getattr(messages[-1], "content", ""))
+
+
+def load_global_features_node(state: AppointmentState) -> dict:
+    features = load_global_features()
+    return {
+        "global_enabled_features": features,
+        "global_patient_features_enabled": any(
+            features.get(feature_name, False)
+            for feature_name in [
+                "view_available_slots",
+                "view_slots_by_specialization",
+                "view_slots_by_doctor",
+                "view_slots_by_date",
+                "view_slots_by_date_range",
+                "view_available_doctors_by_date",
+                "view_doctors_by_specialization",
+                "view_availability_summary",
+                "check_slot_availability",
+                "view_patient_appointments",
+                "book_appointment",
+                "cancel_appointment",
+                "reschedule_appointment",
+            ]
+        ),
+        "global_doctor_features_enabled": any(
+            features.get(feature_name, False)
+            for feature_name in [
+                "doctor_add_availability",
+                "doctor_block_slot",
+                "doctor_update_schedule",
+            ]
+        ),
+    }
+
 
 
 def _is_logout_request(state: AppointmentState) -> bool:
@@ -70,7 +106,9 @@ def build_graph():
     graph = StateGraph(AppointmentState)
 
     # Register nodes
+    graph.add_node("load_global_features", load_global_features_node)
     graph.add_node("supervisor", supervisor_node)
+
     graph.add_node("info_agent", info_agent_node)
     graph.add_node("info_tools", info_tool_node)
     graph.add_node("booking_agent", booking_agent_node)
@@ -86,7 +124,9 @@ def build_graph():
 
 
     # Entry point
-    graph.add_edge(START, "supervisor")
+    graph.add_edge(START, "load_global_features")
+    graph.add_edge("load_global_features", "supervisor")
+
 
     # Supervisor routes to sub-agents
     graph.add_conditional_edges(

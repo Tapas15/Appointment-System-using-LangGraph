@@ -1,31 +1,14 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import AIMessage
 from langgraph.prebuilt import ToolNode
+from dental_agent.config.features import disabled_global_feature_for_request, load_global_features
 from dental_agent.config.settings import get_chat_groq
 from dental_agent.config.runtime import get_graph_settings
 from dental_agent.models.state import AppointmentState
-from dental_agent.tools.csv_reader import (
-    get_available_slots,
-    get_patient_appointments,
-    check_slot_availability,
-    list_doctors_by_specialization,
-    get_available_doctors_by_date,
-    get_available_slots_range,
-    get_specialty_summary,
-    get_total_available_doctors,
-)
+from dental_agent.tools.storage_factory import build_info_tools
 from dental_agent.utils import sanitize_messages
 
-INFO_TOOLS = [
-    get_available_slots,
-    get_available_slots_range,
-    get_specialty_summary,
-    get_total_available_doctors,
-    get_available_doctors_by_date,
-    list_doctors_by_specialization,
-    check_slot_availability,
-    get_patient_appointments,
-]
+INFO_TOOLS = build_info_tools()
 
 INFO_SYSTEM = """You are the Information Agent for a dental appointment system.
 
@@ -69,7 +52,26 @@ INFO_PROMPT = ChatPromptTemplate.from_messages([
 info_tool_node = ToolNode(tools=INFO_TOOLS)
 
 
+def _last_message_text(state: AppointmentState) -> str:
+    messages = state.get("messages", [])
+    if not messages:
+        return ""
+    return str(getattr(messages[-1], "content", ""))
+
+
 def info_agent_node(state: AppointmentState) -> dict:
+    disabled_feature = disabled_global_feature_for_request(
+        state.get("global_enabled_features") or load_global_features(),
+        _last_message_text(state),
+        "patient",
+    )
+    if disabled_feature:
+        message = f"This feature is disabled globally by admin: {disabled_feature}"
+        return {
+            "messages": [AIMessage(content=message)],
+            "final_response": message,
+        }
+
     settings = get_graph_settings()
     llm = get_chat_groq(
         api_key=settings["api_key"],
@@ -83,3 +85,4 @@ def info_agent_node(state: AppointmentState) -> dict:
         "messages": [response],
         "final_response": response.content if not response.tool_calls else None,
     }
+

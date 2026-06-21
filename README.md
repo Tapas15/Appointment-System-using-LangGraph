@@ -15,22 +15,24 @@ A conversational dental appointment management system built with LangGraph and G
 - Book appointments only after checking slot availability.
 - Cancel booked appointments.
 - Reschedule appointments to available slots with the same doctor.
-- Keep appointment data in a CSV file for simple local development.
+- Store appointment data in CSV or SQLite using one active storage backend switch.
 
 ## Architecture
 
-The system uses a LangGraph workflow with a supervisor agent that routes each user message to the correct specialist agent.
+The system uses a LangGraph workflow with a supervisor agent that routes each user message to the correct specialist agent. A `load_global_features` node loads persistent feature flags at the start of every request.
 
 ```text
 User
-  │
-  ▼
+   │
+   ▼
 Supervisor ── intent classification and routing
-  │
-  ├── Info Agent ───────── queries about slots, doctors, and appointments
-  ├── Booking Agent ────── collects details and books appointments
-  ├── Cancellation Agent ─ cancels booked appointments
-  └── Rescheduling Agent ─ moves appointments to new available slots
+   │
+   ├── Info Agent ───────── queries about slots, doctors, and appointments
+   ├── Booking Agent ────── collects details and books appointments
+   ├── Cancellation Agent ─ cancels booked appointments
+   ├── Rescheduling Agent ─ moves appointments to new available slots
+   ├── Doctor Agent ─────── manages doctor schedule (requires doctor login)
+   └── Admin Agent ──────── controls features globally, can perform patient/doctor actions
 ```
 
 ### Agent Responsibilities
@@ -42,6 +44,18 @@ Supervisor ── intent classification and routing
 | Booking Agent | Collects patient ID, doctor, specialization, and date/time, then books the appointment. |
 | Cancellation Agent | Finds booked appointments and cancels them after confirmation. |
 | Rescheduling Agent | Moves an existing appointment to a new available slot. |
+| Doctor Agent | Manages doctor's own schedule after login (add availability, block slots, update schedule). |
+| Admin Agent | Global feature control, patient operations, and doctor schedule management. |
+
+### Global Feature Control
+
+Admin can enable/disable features that apply system-wide:
+
+- Patient features: booking, cancellation, rescheduling, availability lookups
+- Doctor features: add availability, block slot, update schedule
+- Admin control features are protected (cannot be disabled)
+
+Feature state is persisted in `feature_config.json` and reloaded on every graph run.
 
 ## Technology Stack
 
@@ -49,7 +63,8 @@ Supervisor ── intent classification and routing
 - LangGraph
 - LangChain
 - Groq LLM through `langchain-groq`
-- Pandas for CSV-based data handling
+- Pandas for CSV storage
+- SQLite for optional persistent storage
 - Pydantic for structured routing decisions
 - `python-dotenv` for local environment configuration
 
@@ -58,33 +73,52 @@ Supervisor ── intent classification and routing
 ```text
 Appointment-System-using-LangGraph/
 ├── main.py
+├── app.py
+├── feature_config.json
 ├── doctor_availability.csv
 ├── requirements.txt
 ├── data_/
 │   ├── doctor_availability.csv
 │   ├── doctor_availability1.csv
 │   └── doctors.csv
-└── dental_agent/
-    ├── agent.py
+├── dental_agent/
     ├── utils.py
+    ├── storage/
+    │   ├── repository.py
+    │   └── sqlite_store.py
+    ├── config/
+    │   ├── settings.py
+    │   └── features.py
+    ├── models/
+    │   └── state.py
+    ├── tools/
+    │   ├── csv_reader.py
+    │   ├── csv_writer.py
+    │   ├── csv_admin.py
+    │   ├── csv_doctor.py
+    │   ├── sqlite_reader.py
+    │   ├── sqlite_writer.py
+    │   ├── sqlite_admin.py
+    │   ├── sqlite_doctor.py
+    │   └── storage_factory.py
     ├── agents/
     │   ├── supervisor.py
     │   ├── info_agent.py
     │   ├── booking_agent.py
     │   ├── cancellation_agent.py
-    │   └── rescheduling_agent.py
-    ├── config/
-    │   └── settings.py
-    ├── models/
-    │   └── state.py
-    ├── tools/
-    │   ├── csv_reader.py
-    │   └── csv_writer.py
+    │   ├── rescheduling_agent.py
+    │   ├── doctor_agent.py
+    │   └── admin_agent.py
     └── workflows/
         └── graph.py
 ```
 
-The active appointment data file is `doctor_availability.csv` in the project root.
+Appointment data uses one active backend selected by `STORAGE_BACKEND`:
+
+- `csv` uses `doctor_availability.csv`.
+- `sqlite` uses `data/appointments.sqlite3`.
+
+Global feature state is stored in `feature_config.json`.
 
 ## Installation
 
@@ -125,7 +159,55 @@ Create a `.env` file in the project root. Do not commit this file.
 GROQ_API_KEY=your_groq_api_key_here
 MODEL_NAME=openai/gpt-oss-120b
 TEMPERATURE=0
+STORAGE_BACKEND=csv
+SYNC_CSV_SQLITE=false
 ```
+
+`STORAGE_BACKEND` is the only active storage switch. Use either `csv` or `sqlite`, not both.
+
+## Storage Backend Switch
+
+The app supports two separate appointment storage modes. Only one mode is active at a time.
+
+### CSV mode
+
+Use CSV for simple local development and manual data inspection:
+
+```env
+STORAGE_BACKEND=csv
+SYNC_CSV_SQLITE=false
+```
+
+In CSV mode:
+
+- Appointment reads use `doctor_availability.csv`.
+- Appointment writes update `doctor_availability.csv`.
+- SQLite is not used.
+
+### SQLite mode
+
+Use SQLite for persistent local storage:
+
+```env
+STORAGE_BACKEND=sqlite
+SYNC_CSV_SQLITE=false
+```
+
+In SQLite mode:
+
+- Appointment reads use `data/appointments.sqlite3`.
+- Appointment writes update `data/appointments.sqlite3`.
+- CSV is not modified.
+
+If you are switching from CSV to SQLite for the first time and want to import the existing CSV data once, temporarily set:
+
+```env
+SYNC_CSV_SQLITE=true
+```
+
+After the SQLite database is populated, set it back to `false` so SQLite remains the only active write target.
+
+Changing `STORAGE_BACKEND` requires restarting the CLI or Streamlit app because tools are selected when the graph starts.
 
 ## Usage
 
@@ -187,19 +269,63 @@ Check a patient's appointments:
 What appointments does patient 1000048 have?
 ```
 
+## Feature Control
+
+Admin users can control features globally. Login as admin first, then use:
+
+```text
+admin_user
+Admin password? ********
+```
+
+Available feature control commands:
+
+- **List features**: "Show all features" or "What features can be controlled?"
+- **Disable patient booking**: "Disable booking appointments"
+- **Enable patient booking**: "Enable booking appointments"
+- **Disable availability lookup**: "Disable checking availability"
+- **Disable doctor schedule management**: "Disable adding doctor availability"
+
+When a feature is disabled, patients cannot use related functions. Admin control features are protected and cannot be disabled to prevent lockout.
+
+Feature state persists in `feature_config.json` and applies across all sessions.
+
 ## Supported Specializations
 
-- `general_dentist`
-- `oral_surgeon`
-- `orthodontist`
-- `cosmetic_dentist`
-- `prosthodontist`
-- `pediatric_dentist`
-- `emergency_dentist`
+- `general_dentist` - routine checkups and cleanings
+- `oral_surgeon` - oral surgeries
+- `orthodontist` - braces and alignment
+- `cosmetic_dentist` - smile design
+- `prosthodontist` - dental prosthetics
+- `pediatric_dentist` - children's dentistry
+- `emergency_dentist` - urgent care
+
+## Doctor Login
+
+Doctors can log in to manage their own schedules:
+
+```text
+login as doctor Emily Johnson
+```
+
+After login, doctors can add availability and block slots. Doctor login provides `doctor_doctor_name` permission flags.
+
+## Admin Login
+
+Admin users have full system access:
+
+```text
+admin_user
+Admin password? ********
+```
+
+Admin login provides `admin_has_permission` flags enabling all operations.
 
 ## Data Model
 
-Appointment data is stored in `doctor_availability.csv`.
+### Appointment Data (`doctor_availability.csv`)
+
+CSV is active only when `STORAGE_BACKEND=csv`.
 
 | Field | Description |
 | --- | --- |
@@ -208,6 +334,23 @@ Appointment data is stored in `doctor_availability.csv`.
 | `doctor_name` | Doctor name. |
 | `is_available` | `TRUE` for open slots and `FALSE` for booked slots. |
 | `patient_to_attend` | Patient ID for booked slots. Empty for available slots. |
+
+### SQLite Data (`data/appointments.sqlite3`)
+
+SQLite is active only when `STORAGE_BACKEND=sqlite`.
+
+| Table | Description |
+| --- | --- |
+| `slots` | Stores doctor availability slots, booking state, and patient ID. |
+
+The SQLite schema is created automatically in `dental_agent/storage/sqlite_store.py`.
+
+### Global Features (`feature_config.json`)
+
+| Field | Description |
+| --- | --- |
+| `features` | Dict of feature names to enabled/disabled status. |
+| Keys include: `check_availability`, `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `doctor_add_availability`, `doctor_block_slot`, `doctor_update_schedule` |
 
 ## Booking Rules
 
@@ -244,6 +387,22 @@ If Python reports `ModuleNotFoundError: No module named 'langchain_xai'`, reinst
 
 ```bash
 pip install -r requirements.txt
+```
+
+### Storage backend switch
+
+If the app appears to ignore `STORAGE_BACKEND`, restart the CLI or Streamlit app after editing `.env`. The backend is selected when the graph starts.
+
+Use only one value:
+
+```env
+STORAGE_BACKEND=csv
+```
+
+or:
+
+```env
+STORAGE_BACKEND=sqlite
 ```
 
 ### CSV date errors

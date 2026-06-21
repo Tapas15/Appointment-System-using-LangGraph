@@ -1,28 +1,22 @@
-﻿import re
+import re
 import time
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.prebuilt import ToolNode
 
+from dental_agent.config.features import (
+    disabled_global_feature_for_request,
+    load_global_features,
+)
 from dental_agent.config.settings import get_chat_groq
 from dental_agent.config.runtime import get_graph_settings
 from dental_agent.models.state import AppointmentState
-from dental_agent.tools.csv_doctor import (
-    doctor_login,
-    doctor_add_availability,
-    doctor_block_time_slot,
-    doctor_update_schedule,
-)
+from dental_agent.tools.storage_factory import build_doctor_tools
 from dental_agent.utils import sanitize_messages
 
 DOCTOR_SESSION_TIMEOUT_SECONDS = 15 * 60
 
-DOCTOR_TOOLS = [
-    doctor_login,
-    doctor_add_availability,
-    doctor_block_time_slot,
-    doctor_update_schedule,
-]
+DOCTOR_TOOLS = build_doctor_tools()
 
 DOCTOR_SYSTEM = f"""You are the Doctor Agent for a dental appointment system.
 
@@ -54,7 +48,8 @@ Session rules:
 - Do not reveal or repeat doctor passwords.
 
 Doctor work allowed after login:
-- Add or restore availability
+- Add or restore availability for one slot
+- Add or restore availability for multiple dates and times in one request
 - Block time slots
 - Update unbooked schedule slots
 - Answer questions about the doctor's own schedule management
@@ -70,6 +65,8 @@ Schedule rules:
 - Available slot: is_available = TRUE and patient_to_attend is empty.
 - Patient booked slot: is_available = FALSE and patient_to_attend has a patient ID.
 - Doctor blocked slot: is_available = FALSE and patient_to_attend is empty.
+- For bulk availability, create hourly slots by default unless the user asks for another interval.
+- If the user gives multiple dates and a time range, call doctor_add_availability_bulk.
 - Never change a slot that already has a patient booking.
 """
 
@@ -86,6 +83,26 @@ def _last_message_text(state: AppointmentState) -> str:
     if not messages:
         return ""
     return str(getattr(messages[-1], "content", ""))
+
+
+def _disabled_global_doctor_feature(state: AppointmentState) -> str | None:
+    text = _last_message_text(state)
+    normalized = text.strip().lower()
+
+    if _is_logout_request(text):
+        return None
+    if normalized in {"i am doctor", "doctor login", "login", "log in"}:
+        return None
+    if state.get("session_role") == "doctor" and _is_patient_availability_request(text):
+        return None
+
+    return disabled_global_feature_for_request(
+        state.get("global_enabled_features") or load_global_features(),
+        text,
+        "doctor",
+    )
+
+
 
 
 def _reset_doctor_session(message: str) -> dict:
@@ -213,6 +230,15 @@ def doctor_agent_node(state: AppointmentState) -> dict:
             "final_response": message,
         }
 
+    disabled_feature = _disabled_global_doctor_feature(state)
+    if disabled_feature:
+        message = f"This feature is disabled globally by admin: {disabled_feature}"
+        return {
+            "messages": [AIMessage(content=message)],
+            "last_doctor_activity_at": time.time(),
+            "final_response": message,
+        }
+
     settings = get_graph_settings()
     llm = get_chat_groq(
         api_key=settings["api_key"],
@@ -255,3 +281,4 @@ def doctor_agent_node(state: AppointmentState) -> dict:
         update["last_doctor_activity_at"] = time.time()
 
     return update
+

@@ -2,17 +2,20 @@
 Dental Appointment System — powered by LangGraph + Groq
 """
 
+import sys
 from dotenv import load_dotenv
 load_dotenv()
+
+sys.stdout.reconfigure(encoding="utf-8")
 
 from langchain_core.messages import HumanMessage, AIMessageChunk
 from dental_agent.workflows.graph import dental_graph
 
 BANNER = """
-╔══════════════════════════════════════════════════════════╗
-║         Dental Appointment Management System             ║
-║         Powered by LangGraph + Groq                       ║
-╚══════════════════════════════════════════════════════════╝
++--------------------------------------------------+
+|         Dental Appointment Management System     |
+|         Powered by LangGraph + Groq              |
++--------------------------------------------------+
 Available commands:
   • Show available slots for an orthodontist
   • Show general_dentist slots on 7/8/2026

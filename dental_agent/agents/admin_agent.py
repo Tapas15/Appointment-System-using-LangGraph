@@ -6,72 +6,24 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.prebuilt import ToolNode
 
+from dental_agent.config.features import (
+    DOCTOR_FEATURES,
+    PATIENT_FEATURES,
+    PROTECTED_FEATURES,
+    feature_category,
+    load_global_features,
+    save_global_features,
+)
 from dental_agent.config.runtime import get_graph_settings
 from dental_agent.config.settings import get_chat_groq
 from dental_agent.models.state import AppointmentState
-from dental_agent.tools.csv_admin import (
-    ADMIN_FEATURE_DEFINITIONS,
-    admin_add_availability,
-    admin_block_time_slot,
-    admin_disable_doctor_features,
-    admin_disable_feature,
-    admin_disable_patient_features,
-    admin_enable_doctor_features,
-    admin_enable_feature,
-    admin_enable_patient_features,
-    admin_list_features,
-    admin_login,
-    admin_update_schedule,
-)
-from dental_agent.tools.csv_reader import (
-    check_slot_availability,
-    get_available_doctors_by_date,
-    get_available_slots,
-    get_available_slots_range,
-    get_patient_appointments,
-    get_specialty_summary,
-    get_total_available_doctors,
-    list_doctors_by_specialization,
-)
-from dental_agent.tools.csv_writer import (
-    book_appointment,
-    cancel_appointment,
-    reschedule_appointment,
+from dental_agent.tools.storage_factory import (
+    get_admin_feature_tools,
+    get_admin_operation_tool_map,
 )
 from dental_agent.utils import sanitize_messages
 
 ADMIN_SESSION_TIMEOUT_SECONDS = 15 * 60
-
-ADMIN_TOOLS = [
-    admin_login,
-    admin_enable_patient_features,
-    admin_disable_patient_features,
-    admin_enable_doctor_features,
-    admin_disable_doctor_features,
-    admin_enable_feature,
-    admin_disable_feature,
-    admin_list_features,
-]
-
-PATIENT_ADMIN_TOOLS = [
-    get_available_slots,
-    get_available_slots_range,
-    get_specialty_summary,
-    get_total_available_doctors,
-    get_available_doctors_by_date,
-    list_doctors_by_specialization,
-    check_slot_availability,
-    get_patient_appointments,
-    book_appointment,
-    cancel_appointment,
-    reschedule_appointment,
-]
-
-DOCTOR_ADMIN_TOOLS = [
-    admin_add_availability,
-    admin_block_time_slot,
-    admin_update_schedule,
-]
 
 ADMIN_SYSTEM = """You are the Admin Agent for a dental appointment management system.
 
@@ -81,6 +33,7 @@ Rules:
 - Admin must login first with admin_user_id and password.
 - After successful admin login, all individual admin features are enabled by default.
 - Admin can enable or disable each individual feature by exact feature name.
+- Feature changes apply globally to patient, doctor, and admin modes.
 - Admin can list admin-controlled features with admin_list_features.
 - If a requested feature is disabled, do not perform that action.
 - Admin can do patient work only when the exact patient feature is enabled.
@@ -95,7 +48,7 @@ ADMIN_PROMPT = ChatPromptTemplate.from_messages([
     ("placeholder", "{messages}"),
 ])
 
-admin_tool_node = ToolNode(tools=ADMIN_TOOLS + PATIENT_ADMIN_TOOLS + DOCTOR_ADMIN_TOOLS)
+admin_tool_node = ToolNode(tools=get_admin_feature_tools() + list(get_admin_operation_tool_map().values()))
 
 
 def _last_message_text(state: AppointmentState) -> str:
@@ -110,11 +63,18 @@ def _admin_context(state: AppointmentState) -> str:
     admin = state.get("authenticated_admin") or "None"
     patient_features = bool(state.get("admin_patient_features_enabled"))
     doctor_features = bool(state.get("admin_doctor_features_enabled"))
+    global_patient_features = bool(state.get("global_patient_features_enabled"))
+    global_doctor_features = bool(state.get("global_doctor_features_enabled"))
     started_at = state.get("admin_session_started_at") or "None"
     last_activity = state.get("last_admin_activity_at") or "None"
     enabled_features = ", ".join(sorted(
         feature_name
         for feature_name, enabled in (state.get("admin_enabled_features") or {}).items()
+        if enabled
+    )) or "None"
+    global_enabled_features = ", ".join(sorted(
+        feature_name
+        for feature_name, enabled in (state.get("global_enabled_features") or {}).items()
         if enabled
     )) or "None"
 
@@ -123,7 +83,10 @@ def _admin_context(state: AppointmentState) -> str:
         f"authenticated_admin: {admin}\n"
         f"admin_patient_features_enabled: {patient_features}\n"
         f"admin_doctor_features_enabled: {doctor_features}\n"
+        f"global_patient_features_enabled: {global_patient_features}\n"
+        f"global_doctor_features_enabled: {global_doctor_features}\n"
         f"enabled_features: {enabled_features}\n"
+        f"global_enabled_features: {global_enabled_features}\n"
         f"admin_session_started_at: {started_at}\n"
         f"last_admin_activity_at: {last_activity}\n"
         f"admin_session_timeout_seconds: {ADMIN_SESSION_TIMEOUT_SECONDS}"
@@ -337,37 +300,79 @@ def _feature_enabled(state: AppointmentState, feature_name: str) -> bool:
     return bool(features.get(feature_name, False))
 
 
-def _set_feature_state(state: AppointmentState, feature_name: str, enabled: bool) -> dict:
-    features = dict(state.get("admin_enabled_features") or {})
-    features[feature_name] = enabled
+def _global_feature_enabled(state: AppointmentState, feature_name: str) -> bool:
+    features = state.get("global_enabled_features") or load_global_features()
+    return bool(features.get(feature_name, True))
 
-    patient_features = {
-        "view_available_slots",
-        "view_slots_by_specialization",
-        "view_slots_by_doctor",
-        "view_slots_by_date",
-        "view_slots_by_date_range",
-        "view_available_doctors_by_date",
-        "view_doctors_by_specialization",
-        "view_availability_summary",
-        "check_slot_availability",
-        "view_patient_appointments",
-        "book_appointment",
-        "cancel_appointment",
-        "reschedule_appointment",
-    }
-    doctor_features = {
-        "doctor_add_availability",
-        "doctor_block_slot",
-        "doctor_update_schedule",
-    }
 
+def _admin_action_allowed(state: AppointmentState, feature_name: str) -> bool:
+    return _feature_enabled(state, feature_name) and _global_feature_enabled(state, feature_name)
+
+
+def _feature_state_updates(features: dict[str, bool]) -> dict:
     return {
         "admin_enabled_features": features,
-        "admin_patient_features_enabled": any(features.get(feature, False) for feature in patient_features),
-        "admin_doctor_features_enabled": any(features.get(feature, False) for feature in doctor_features),
+        "admin_patient_features_enabled": any(features.get(feature, False) for feature in PATIENT_FEATURES),
+        "admin_doctor_features_enabled": any(features.get(feature, False) for feature in DOCTOR_FEATURES),
+        "global_enabled_features": features,
+        "global_patient_features_enabled": any(features.get(feature, False) for feature in PATIENT_FEATURES),
+        "global_doctor_features_enabled": any(features.get(feature, False) for feature in DOCTOR_FEATURES),
         "last_admin_activity_at": time.time(),
     }
+
+
+def _set_feature_state(state: AppointmentState, feature_name: str, enabled: bool) -> dict:
+    features = dict(state.get("admin_enabled_features") or load_global_features())
+    features[feature_name] = enabled
+
+    global_features = dict(state.get("global_enabled_features") or load_global_features())
+    global_features[feature_name] = enabled
+
+    try:
+        save_global_features(global_features)
+    except OSError as exc:
+        return {
+            "messages": [AIMessage(content=f"Could not save global feature settings: {exc}")],
+            "last_admin_activity_at": time.time(),
+        }
+
+    return {
+        **_feature_state_updates(features),
+        "global_enabled_features": global_features,
+        "global_patient_features_enabled": any(global_features.get(feature, False) for feature in PATIENT_FEATURES),
+        "global_doctor_features_enabled": any(global_features.get(feature, False) for feature in DOCTOR_FEATURES),
+    }
+
+
+def _set_category_feature_state(state: AppointmentState, category: str, enabled: bool) -> dict:
+    features = dict(state.get("admin_enabled_features") or load_global_features())
+    global_features = dict(state.get("global_enabled_features") or load_global_features())
+
+    category_features = PATIENT_FEATURES if category == "patient" else DOCTOR_FEATURES
+    for feature_name in category_features:
+        features[feature_name] = enabled
+        global_features[feature_name] = enabled
+
+    try:
+        save_global_features(global_features)
+    except OSError as exc:
+        return {
+            "messages": [AIMessage(content=f"Could not save global feature settings: {exc}")],
+            "last_admin_activity_at": time.time(),
+        }
+
+    return {
+        **_feature_state_updates(features),
+        "global_enabled_features": global_features,
+        "global_patient_features_enabled": any(global_features.get(feature, False) for feature in PATIENT_FEATURES),
+        "global_doctor_features_enabled": any(global_features.get(feature, False) for feature in DOCTOR_FEATURES),
+    }
+
+
+def _protected_feature_message(feature_name: str) -> str:
+    if feature_category(feature_name) == "admin":
+        return "Admin control features cannot be disabled."
+    return f"Unknown feature: {feature_name}"
 
 
 def _parse_tool_content(content) -> dict | None:
@@ -404,6 +409,7 @@ def _tool_result_state_update(state: AppointmentState) -> dict:
         now = time.time()
         admin_id = result.get("admin_user_id")
         enabled_features = result.get("admin_enabled_features") or {}
+        global_features = result.get("global_enabled_features") or load_global_features()
         return {
             "admin_session_role": "admin",
             "authenticated_admin": admin_id,
@@ -413,103 +419,43 @@ def _tool_result_state_update(state: AppointmentState) -> dict:
             "admin_patient_features_enabled": bool(result.get("admin_patient_features_enabled", True)),
             "admin_doctor_features_enabled": bool(result.get("admin_doctor_features_enabled", True)),
             "admin_enabled_features": enabled_features,
+            "global_patient_features_enabled": any(global_features.get(feature, False) for feature in PATIENT_FEATURES),
+            "global_doctor_features_enabled": any(global_features.get(feature, False) for feature in DOCTOR_FEATURES),
+            "global_enabled_features": global_features,
         }
 
     if tool_message.name == admin_enable_patient_features.name:
-        features = {
-            feature_name: True
-            for feature_name in ADMIN_FEATURE_DEFINITIONS
-            if feature_name != "admin_list_features"
-        }
         return {
-            **_set_feature_state(state, "view_available_slots", True),
-            **{
-                feature_name: True
-                for feature_name in [
-                    "view_slots_by_specialization",
-                    "view_slots_by_doctor",
-                    "view_slots_by_date",
-                    "view_slots_by_date_range",
-                    "view_available_doctors_by_date",
-                    "view_doctors_by_specialization",
-                    "view_availability_summary",
-                    "check_slot_availability",
-                    "view_patient_appointments",
-                    "book_appointment",
-                    "cancel_appointment",
-                    "reschedule_appointment",
-                ]
-            },
-            "admin_patient_features_enabled": True,
+            **_set_category_feature_state(state, "patient", True),
             "message": result.get("message"),
         }
 
     if tool_message.name == admin_disable_patient_features.name:
-        features = dict(state.get("admin_enabled_features") or {})
-        for feature_name in [
-            "view_available_slots",
-            "view_slots_by_specialization",
-            "view_slots_by_doctor",
-            "view_slots_by_date",
-            "view_slots_by_date_range",
-            "view_available_doctors_by_date",
-            "view_doctors_by_specialization",
-            "view_availability_summary",
-            "check_slot_availability",
-            "view_patient_appointments",
-            "book_appointment",
-            "cancel_appointment",
-            "reschedule_appointment",
-        ]:
-            features[feature_name] = False
         return {
-            **_set_feature_state(state, "view_available_slots", False),
-            **{
-                feature_name: False
-                for feature_name in [
-                    "view_slots_by_specialization",
-                    "view_slots_by_doctor",
-                    "view_slots_by_date",
-                    "view_slots_by_date_range",
-                    "view_available_doctors_by_date",
-                    "view_doctors_by_specialization",
-                    "view_availability_summary",
-                    "check_slot_availability",
-                    "view_patient_appointments",
-                    "book_appointment",
-                    "cancel_appointment",
-                    "reschedule_appointment",
-                ]
-            },
-            "admin_patient_features_enabled": False,
+            **_set_category_feature_state(state, "patient", False),
             "message": result.get("message"),
         }
 
     if tool_message.name == admin_enable_doctor_features.name:
         return {
-            **_set_feature_state(state, "doctor_add_availability", True),
-            **{
-                "doctor_block_slot": True,
-                "doctor_update_schedule": True,
-            },
-            "admin_doctor_features_enabled": True,
+            **_set_category_feature_state(state, "doctor", True),
             "message": result.get("message"),
         }
 
     if tool_message.name == admin_disable_doctor_features.name:
         return {
-            **_set_feature_state(state, "doctor_add_availability", False),
-            **{
-                "doctor_block_slot": False,
-                "doctor_update_schedule": False,
-            },
-            "admin_doctor_features_enabled": False,
+            **_set_category_feature_state(state, "doctor", False),
             "message": result.get("message"),
         }
 
     if tool_message.name == admin_enable_feature.name:
         feature_name = result.get("feature_name")
         if feature_name in ADMIN_FEATURE_DEFINITIONS:
+            if feature_name in PROTECTED_FEATURES:
+                return {
+                    "messages": [AIMessage(content="Admin control features cannot be disabled.")],
+                    "last_admin_activity_at": time.time(),
+                }
             return {
                 **_set_feature_state(state, feature_name, True),
                 "message": result.get("message"),
@@ -518,6 +464,11 @@ def _tool_result_state_update(state: AppointmentState) -> dict:
     if tool_message.name == admin_disable_feature.name:
         feature_name = result.get("feature_name")
         if feature_name in ADMIN_FEATURE_DEFINITIONS:
+            if feature_name in PROTECTED_FEATURES:
+                return {
+                    "messages": [AIMessage(content="Admin control features cannot be disabled.")],
+                    "last_admin_activity_at": time.time(),
+                }
             return {
                 **_set_feature_state(state, feature_name, False),
                 "message": result.get("message"),
@@ -528,70 +479,53 @@ def _tool_result_state_update(state: AppointmentState) -> dict:
 
 def _admin_tools_for_state(state: AppointmentState) -> list:
     features = state.get("admin_enabled_features") or {}
-    tools = [admin_login]
-
-    if features.get("admin_list_features", False):
-        tools.append(admin_list_features)
-    if features.get("admin_enable_feature", False):
-        tools.extend([
-            admin_enable_patient_features,
-            admin_enable_doctor_features,
-            admin_enable_feature,
-        ])
-    if features.get("admin_disable_feature", False):
-        tools.extend([
-            admin_disable_patient_features,
-            admin_disable_doctor_features,
-            admin_disable_feature,
-        ])
+    tools = list(get_admin_feature_tools())
+    operation_tools = get_admin_operation_tool_map()
 
     if state.get("admin_session_role") != "admin":
         return tools
 
     if features.get("view_available_slots") or features.get("view_slots_by_specialization") or features.get("view_slots_by_doctor") or features.get("view_slots_by_date"):
-        tools.append(get_available_slots)
+        tools.append(operation_tools["view_available_slots"])
 
     if features.get("view_slots_by_date_range"):
-        tools.append(get_available_slots_range)
+        tools.append(operation_tools["view_slots_by_date_range"])
 
     if features.get("view_availability_summary"):
-        tools.extend([
-            get_specialty_summary,
-            get_total_available_doctors,
-        ])
+        tools.append(operation_tools["view_availability_summary"])
+        tools.append(operation_tools["view_availability_summary_total"])
 
     if features.get("view_available_doctors_by_date"):
-        tools.append(get_available_doctors_by_date)
+        tools.append(operation_tools["view_available_doctors_by_date"])
 
     if features.get("view_doctors_by_specialization"):
-        tools.append(list_doctors_by_specialization)
+        tools.append(operation_tools["view_doctors_by_specialization"])
 
     if features.get("check_slot_availability") or features.get("book_appointment") or features.get("reschedule_appointment"):
-        tools.append(check_slot_availability)
+        tools.append(operation_tools["check_slot_availability"])
 
     if features.get("view_patient_appointments") or features.get("cancel_appointment") or features.get("reschedule_appointment"):
-        tools.append(get_patient_appointments)
+        tools.append(operation_tools["view_patient_appointments"])
 
     if features.get("book_appointment"):
-        tools.append(book_appointment)
+        tools.append(operation_tools["book_appointment"])
 
     if features.get("cancel_appointment"):
-        tools.append(cancel_appointment)
+        tools.append(operation_tools["cancel_appointment"])
 
     if features.get("reschedule_appointment"):
-        tools.append(reschedule_appointment)
+        tools.append(operation_tools["reschedule_appointment"])
 
     if features.get("doctor_add_availability"):
-        tools.append(admin_add_availability)
+        tools.append(operation_tools["doctor_add_availability"])
 
     if features.get("doctor_block_slot"):
-        tools.append(admin_block_time_slot)
+        tools.append(operation_tools["doctor_block_slot"])
 
     if features.get("doctor_update_schedule"):
-        tools.append(admin_update_schedule)
+        tools.append(operation_tools["doctor_update_schedule"])
 
     return tools
-
 
 def admin_agent_node(state: AppointmentState) -> dict:
     text = _last_message_text(state)
@@ -635,9 +569,12 @@ def admin_agent_node(state: AppointmentState) -> dict:
     if (
         state.get("admin_session_role") == "admin"
         and required_feature
-        and not _feature_enabled(state, required_feature)
+        and not _admin_action_allowed(state, required_feature)
     ):
-        message = f"This feature is disabled: {required_feature}"
+        if not _global_feature_enabled(state, required_feature):
+            message = f"This feature is disabled globally by admin: {required_feature}"
+        else:
+            message = f"This feature is disabled for admin: {required_feature}"
         return {
             "messages": [AIMessage(content=message)],
             "last_admin_activity_at": time.time(),
@@ -667,3 +604,8 @@ def admin_agent_node(state: AppointmentState) -> dict:
         update.update(pending_tool_update)
 
     return update
+
+
+
+
+

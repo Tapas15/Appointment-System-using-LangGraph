@@ -1,13 +1,14 @@
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import AIMessage
 from langgraph.prebuilt import ToolNode
+from dental_agent.config.features import load_global_features
 from dental_agent.config.settings import get_chat_groq
 from dental_agent.config.runtime import get_graph_settings
 from dental_agent.models.state import AppointmentState
-from dental_agent.tools.csv_reader import get_patient_appointments
-from dental_agent.tools.csv_writer import cancel_appointment
+from dental_agent.tools.storage_factory import build_cancellation_tools
 from dental_agent.utils import sanitize_messages
 
-CANCEL_TOOLS = [get_patient_appointments, cancel_appointment]
+CANCEL_TOOLS = build_cancellation_tools()
 
 CANCEL_SYSTEM = """You are the Cancellation Agent for a dental appointment management system.
 
@@ -22,7 +23,7 @@ Your ONLY job is to cancel existing appointments.
    to list their bookings, then ask which one to cancel.
 
 3. Confirm with the user before proceeding:
-   "Are you sure you want to cancel the appointment at {date_slot} with {doctor_name}? (yes/no)"
+   "Are you sure you want to cancel the appointment at {{date_slot}} with {{doctor_name}}? (yes/no)"
 
 4. On user confirmation, call cancel_appointment(patient_id, date_slot).
 
@@ -47,6 +48,14 @@ cancellation_tool_node = ToolNode(tools=CANCEL_TOOLS)
 
 
 def cancellation_agent_node(state: AppointmentState) -> dict:
+    global_features = state.get("global_enabled_features") or load_global_features()
+    if not global_features.get("cancel_appointment", True):
+        message = "This feature is disabled globally by admin: cancel_appointment"
+        return {
+            "messages": [AIMessage(content=message)],
+            "final_response": message,
+        }
+
     settings = get_graph_settings()
     llm = get_chat_groq(
         api_key=settings["api_key"],
@@ -60,3 +69,5 @@ def cancellation_agent_node(state: AppointmentState) -> dict:
         "messages": [response],
         "final_response": response.content if not response.tool_calls else None,
     }
+
+

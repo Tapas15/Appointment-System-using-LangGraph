@@ -1,13 +1,14 @@
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import AIMessage
 from langgraph.prebuilt import ToolNode
+from dental_agent.config.features import load_global_features
 from dental_agent.config.settings import get_chat_groq
 from dental_agent.config.runtime import get_graph_settings
 from dental_agent.models.state import AppointmentState
-from dental_agent.tools.csv_reader import get_available_slots, check_slot_availability
-from dental_agent.tools.csv_writer import book_appointment
+from dental_agent.tools.storage_factory import build_booking_tools
 from dental_agent.utils import sanitize_messages
 
-BOOKING_TOOLS = [get_available_slots, check_slot_availability, book_appointment]
+BOOKING_TOOLS = build_booking_tools()
 
 BOOKING_SYSTEM = """You are the Booking Agent for a dental appointment management system.
 
@@ -46,6 +47,14 @@ booking_tool_node = ToolNode(tools=BOOKING_TOOLS)
 
 
 def booking_agent_node(state: AppointmentState) -> dict:
+    global_features = state.get("global_enabled_features") or load_global_features()
+    if not global_features.get("book_appointment", True):
+        message = "This feature is disabled globally by admin: book_appointment"
+        return {
+            "messages": [AIMessage(content=message)],
+            "final_response": message,
+        }
+
     settings = get_graph_settings()
     llm = get_chat_groq(
         api_key=settings["api_key"],
@@ -59,3 +68,4 @@ def booking_agent_node(state: AppointmentState) -> dict:
         "messages": [response],
         "final_response": response.content if not response.tool_calls else None,
     }
+

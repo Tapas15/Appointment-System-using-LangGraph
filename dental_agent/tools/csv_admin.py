@@ -3,6 +3,7 @@ import time
 import pandas as pd
 from langchain_core.tools import tool
 
+from dental_agent.config.features import load_global_features
 from dental_agent.config.settings import ADMIN_USERS, CSV_PATH
 from dental_agent.utils import format_date_slot
 
@@ -135,6 +136,9 @@ def admin_login(admin_user_id: str, password: str) -> dict:
         "admin_patient_features_enabled": True,
         "admin_doctor_features_enabled": True,
         "admin_enabled_features": _all_features_enabled(),
+        "global_enabled_features": load_global_features(),
+        "global_patient_features_enabled": True,
+        "global_doctor_features_enabled": True,
         "message": f"Admin logged in as {admin}. All individual admin features are enabled by default.",
     }
 

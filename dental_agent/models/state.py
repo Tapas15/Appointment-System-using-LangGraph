@@ -48,6 +48,9 @@ class AppointmentState(TypedDict):
     admin_patient_features_enabled: Optional[bool]
     admin_doctor_features_enabled: Optional[bool]
     admin_enabled_features: Optional[dict[str, bool]]
+    global_patient_features_enabled: Optional[bool]
+    global_doctor_features_enabled: Optional[bool]
+    global_enabled_features: Optional[dict[str, bool]]
 
     # User-supplied booking parameters
     patient_id: Optional[str]

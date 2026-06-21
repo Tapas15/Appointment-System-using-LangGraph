@@ -23,7 +23,7 @@ def _load_df() -> pd.DataFrame:
 def _save_df(df: pd.DataFrame) -> None:
     out = df.copy()
     out["date_slot"] = out["date_slot"].map(format_date_slot)
-    out["is_available"] = out["is_available"].map({True: "TRUE", False: "FALSE"})
+    out["is_available"] = out["is_available"].astype(str).str.upper().map({"TRUE": "TRUE", "FALSE": "FALSE"}).fillna("TRUE")
     out["patient_to_attend"] = (
         out["patient_to_attend"]
         .replace("nan", "")

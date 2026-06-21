@@ -3,30 +3,34 @@ from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import create_react_agent
 
 from dental_agent.config.settings import GROQ_API_KEY, MODEL_NAME, TEMPERATURE
+from dental_agent.tools.storage_factory import (
+    build_booking_tools,
+    build_cancellation_tools,
+    build_info_tools,
+    build_rescheduling_tools,
+)
 from dental_agent.utils import sanitize_messages
-from dental_agent.tools.csv_reader import (
-    get_available_slots,
-    get_patient_appointments,
-    check_slot_availability,
-    list_doctors_by_specialization,
-    get_available_doctors_by_date,
-)
-from dental_agent.tools.csv_writer import (
-    book_appointment,
-    cancel_appointment,
-    reschedule_appointment,
-)
 
-TOOLS = [
-    get_available_slots,
-    get_patient_appointments,
-    check_slot_availability,
-    list_doctors_by_specialization,
-    get_available_doctors_by_date,
-    book_appointment,
-    cancel_appointment,
-    reschedule_appointment,
-]
+
+def _dedupe_tools(tool_groups: list[list]) -> list:
+    tools = []
+    seen = set()
+    for group in tool_groups:
+        for tool in group:
+            name = getattr(tool, "name", str(tool))
+            if name in seen:
+                continue
+            tools.append(tool)
+            seen.add(name)
+    return tools
+
+
+TOOLS = _dedupe_tools([
+    build_info_tools(),
+    build_booking_tools(),
+    build_cancellation_tools(),
+    build_rescheduling_tools(),
+])
 
 SYSTEM_PROMPT = """You are a helpful dental appointment assistant. You help patients with:
 
