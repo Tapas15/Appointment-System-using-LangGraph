@@ -31,7 +31,7 @@ is no longer used by `main.py` or `app.py`.
 ```text
 User Input
    ↓
-main.py or app.py
+main.py or app.py or telegram_bot.py
    ↓
 LangGraph workflow
    ↓
@@ -138,6 +138,7 @@ Streamlit must be installed in the virtual environment before this app can run.
 Appointment-System-using-LangGraph/
 ├── main.py
 ├── app.py
+├── telegram_bot.py
 ├── requirements.txt
 ├── .env
 ├── .gitignore
@@ -203,6 +204,7 @@ MODEL_NAME
 TEMPERATURE
 STORAGE_BACKEND
 SYNC_CSV_SQLITE
+TELEGRAM_BOT_TOKEN
 VALID_SPECIALIZATIONS
 ADMIN_USERS
 VALID_DOCTORS
@@ -1508,6 +1510,7 @@ Active entry points:
 ```text
 main.py
 app.py
+telegram_bot.py
 ```
 
 Active graph:

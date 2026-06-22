@@ -161,6 +161,7 @@ MODEL_NAME=openai/gpt-oss-120b
 TEMPERATURE=0
 STORAGE_BACKEND=csv
 SYNC_CSV_SQLITE=false
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 ```
 
 `STORAGE_BACKEND` is the only active storage switch. Use either `csv` or `sqlite`, not both.
@@ -207,7 +208,7 @@ SYNC_CSV_SQLITE=true
 
 After the SQLite database is populated, set it back to `false` so SQLite remains the only active write target.
 
-Changing `STORAGE_BACKEND` requires restarting the CLI or Streamlit app because tools are selected when the graph starts.
+Changing `STORAGE_BACKEND` requires restarting the CLI, Streamlit app, or Telegram bot because tools are selected when the graph starts.
 
 ## Usage
 
@@ -218,6 +219,37 @@ python main.py
 ```
 
 Type `quit`, `exit`, or `bye` to stop the application.
+
+## Telegram Bot
+
+Create a Telegram bot with BotFather, copy the token, then add it to `.env`:
+
+```env
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+```
+
+Install the Telegram dependency:
+
+```bash
+pip install -r requirements.txt
+```
+
+Start the bot:
+
+```bash
+python telegram_bot.py
+```
+
+Available Telegram commands:
+
+```text
+/start
+/help
+/reset
+/backend
+```
+
+The bot keeps a separate LangGraph conversation state for each Telegram `chat_id`.
 
 ## Example Commands
 
@@ -389,9 +421,17 @@ If Python reports `ModuleNotFoundError: No module named 'langchain_xai'`, reinst
 pip install -r requirements.txt
 ```
 
+### Missing Telegram token
+
+If `python telegram_bot.py` fails with a missing token error, add this to `.env`:
+
+```env
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+```
+
 ### Storage backend switch
 
-If the app appears to ignore `STORAGE_BACKEND`, restart the CLI or Streamlit app after editing `.env`. The backend is selected when the graph starts.
+If the app appears to ignore `STORAGE_BACKEND`, restart the CLI, Streamlit app, or Telegram bot after editing `.env`. The backend is selected when the graph starts.
 
 Use only one value:
 

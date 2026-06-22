@@ -24,6 +24,26 @@ bye
 
 ---
 
+## 1.1. Telegram Bot
+
+The Telegram bot uses the same LangGraph workflow as the CLI.
+
+Required `.env` value:
+
+```text
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+```
+
+Start:
+
+```powershell
+python telegram_bot.py
+```
+
+The bot keeps a separate conversation state for each Telegram `chat_id`.
+
+---
+
 ## 2. Main Flow From `main.py`
 
 ```text
@@ -67,6 +87,7 @@ Routing priority:
 | Area | File |
 |---|---|
 | CLI entry point | `main.py` |
+| Telegram entry point | `telegram_bot.py` |
 | LangGraph workflow | `dental_agent/workflows/graph.py` |
 | Supervisor routing | `dental_agent/agents/supervisor.py` |
 | Patient info tools | `dental_agent/tools/storage_factory.py` selects CSV or SQLite reader tools |
@@ -104,7 +125,7 @@ uses:
 data/appointments.sqlite3
 ```
 
-Only one backend is active at a time. Changing the backend requires restarting the CLI or Streamlit app.
+Only one backend is active at a time. Changing the backend requires restarting the CLI, Streamlit app, or Telegram bot.
 
 CSV required columns:
 
